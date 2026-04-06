@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#4f46e5"/>
+  <!-- Graduation cap -->
+  <polygon points="256,140 400,210 256,280 112,210" fill="white" opacity="0.95"/>
+  <rect x="242" y="280" width="28" height="90" rx="8" fill="white" opacity="0.95"/>
+  <ellipse cx="256" cy="372" rx="44" ry="20" fill="white" opacity="0.9"/>
+  <!-- Tassel cord -->
+  <path d="M390 210 L390 275" stroke="white" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+  <circle cx="390" cy="282" r="10" fill="#10b981"/>
+</svg>

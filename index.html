@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gelişmiş Öğrenci Asistanı</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Öğrenci">
+    <link rel="apple-touch-icon" href="icon.svg">
     <style>
         :root {
             --bg-color: #f3f4f6;
@@ -431,6 +440,63 @@
         .search-bar { position: relative; margin-bottom: 0.85rem; }
         .search-bar input { padding-left: 2.5rem; }
         .search-bar::before { content: '🔍'; position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); font-size: 0.95rem; pointer-events: none; }
+
+        /* ══════════ PWA INSTALL BANNER ══════════ */
+        #pwa-install-banner {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            z-index: 10002;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            padding: 1rem 1.25rem;
+            padding-bottom: calc(1rem + var(--safe-bottom));
+            animation: slideUpBanner 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #pwa-install-banner.visible { display: block; }
+        .pwa-banner-inner {
+            display: flex; align-items: center; gap: 0.85rem;
+            max-width: 540px; margin: 0 auto;
+        }
+        .pwa-banner-icon {
+            width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.6rem;
+        }
+        .pwa-banner-text { flex: 1; min-width: 0; }
+        .pwa-banner-text strong { font-size: 0.9rem; display: block; color: var(--text-main); }
+        .pwa-banner-text span { font-size: 0.78rem; color: var(--text-muted); }
+        .pwa-banner-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+        .pwa-install-btn {
+            background: var(--primary); color: white;
+            border: none; border-radius: var(--radius-sm);
+            padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+            white-space: nowrap;
+        }
+        .pwa-install-btn:hover { background: var(--primary-hover); }
+        .pwa-dismiss-btn {
+            background: transparent; color: var(--text-muted);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 0.5rem 0.75rem; font-size: 0.85rem;
+            cursor: pointer; transition: var(--transition);
+        }
+        .pwa-dismiss-btn:hover { background: var(--bg-color); }
+        /* iOS instruction variant */
+        .pwa-ios-hint {
+            font-size: 0.78rem; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;
+            margin-top: 0.35rem;
+        }
+        .pwa-ios-badge {
+            background: var(--primary-light); color: var(--primary);
+            border-radius: 5px; padding: 1px 6px; font-weight: 700; font-size: 0.75rem;
+        }
+        @keyframes slideUpBanner {
+            from { opacity: 0; transform: translateY(100%); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
 
         /* Toast */
         .toast-container {
@@ -1029,6 +1095,28 @@
 
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
+
+    <!-- PWA Install Banner -->
+    <div id="pwa-install-banner" role="complementary" aria-label="Ana ekrana ekle">
+        <div class="pwa-banner-inner">
+            <div class="pwa-banner-icon">🎓</div>
+            <div class="pwa-banner-text">
+                <strong id="pwa-banner-title">Ana Ekrana Ekle</strong>
+                <span id="pwa-banner-desc">Uygulamayı ana ekranına ekleyerek daha hızlı aç.</span>
+                <div class="pwa-ios-hint" id="pwa-ios-hint" style="display:none">
+                    <span>Safari'de</span>
+                    <span class="pwa-ios-badge">Paylaş</span>
+                    <span>→</span>
+                    <span class="pwa-ios-badge">Ana Ekrana Ekle</span>
+                    <span>seç.</span>
+                </div>
+            </div>
+            <div class="pwa-banner-actions">
+                <button class="pwa-install-btn" id="pwa-install-btn" onclick="app.pwaInstall()">Ekle</button>
+                <button class="pwa-dismiss-btn" id="pwa-dismiss-btn" onclick="app.pwaDismiss()" aria-label="Kapat">✕</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ══════════ İÇERİK ══════════ -->
     <main class="main-content" id="main-content">
@@ -2534,6 +2622,68 @@
     };
 
     window.addEventListener('DOMContentLoaded', () => app.init());
+
+    // ══════════ PWA ══════════
+    (function() {
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
+        }
+
+        // Don't show banner if already running as installed PWA
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+
+        const DISMISSED_KEY = 'pwa_banner_dismissed';
+        if (sessionStorage.getItem(DISMISSED_KEY)) return;
+
+        const banner = document.getElementById('pwa-install-banner');
+        const installBtn = document.getElementById('pwa-install-btn');
+        const iosHint = document.getElementById('pwa-ios-hint');
+        let deferredPrompt = null;
+
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+        function showBanner() {
+            if (banner) banner.classList.add('visible');
+        }
+
+        // Android/Chrome: capture the install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showBanner();
+        });
+
+        // iOS Safari: show manual instructions
+        if (isIOS && isSafari) {
+            if (iosHint) iosHint.style.display = 'flex';
+            if (installBtn) { installBtn.textContent = 'Nasıl?'; installBtn.onclick = null; installBtn.addEventListener('click', () => {
+                if (iosHint) iosHint.style.display = iosHint.style.display === 'none' ? 'flex' : 'none';
+            }); }
+            setTimeout(showBanner, 3000);
+        }
+
+        // Provide pwaInstall / pwaDismiss on the app object
+        app.pwaInstall = function() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+                if (banner) banner.classList.remove('visible');
+            }
+        };
+
+        app.pwaDismiss = function() {
+            if (banner) banner.classList.remove('visible');
+            sessionStorage.setItem(DISMISSED_KEY, '1');
+        };
+
+        // Hide banner after successful install
+        window.addEventListener('appinstalled', () => {
+            if (banner) banner.classList.remove('visible');
+            app.showToast('Uygulama ana ekrana eklendi! 🎉', 'success');
+        });
+    })();
     </script>
 </body>
 </html>
