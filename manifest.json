@@ -1,0 +1,27 @@
+{
+  "name": "Gelişmiş Öğrenci Asistanı",
+  "short_name": "Öğrenci",
+  "description": "Ders programı, ödev ve sınav takibi, notlar, çalışma kartları ve daha fazlası",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4f46e5",
+  "lang": "tr",
+  "orientation": "portrait",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
