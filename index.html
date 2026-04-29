@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Öğrenci">
-    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         :root {
             --bg-color: #f3f4f6;
@@ -1248,7 +1248,8 @@
                                 <option value="#3b82f6">🔵 Mavi</option><option value="#ec4899">🩷 Pembe</option>
                             </select>
                         </div>
-                        <button type="submit" style="width:100%;">➕ Dersi Ekle</button>
+                        <button type="submit" id="class-submit-btn" style="width:100%;">➕ Dersi Ekle</button>
+                        <button type="button" id="class-cancel-edit" style="width:100%;margin-top:0.5rem;display:none;" class="btn-secondary" onclick="app.cancelScheduleEdit()">İptal</button>
                         <button type="button" style="width:100%;margin-top:0.5rem;" class="btn-secondary" onclick="app.openImportModal()">📸 Fotoğraftan İçe Aktar</button>
                     </form>
                 </div>
@@ -1306,7 +1307,8 @@
                             <label>Açıklama (Opsiyonel)</label>
                             <textarea id="task-desc" rows="2" placeholder="Detaylar..." maxlength="500"></textarea>
                         </div>
-                        <button type="submit" style="width:100%;">➕ Görevi Ekle</button>
+                        <button type="submit" id="task-submit-btn" style="width:100%;">➕ Görevi Ekle</button>
+                        <button type="button" id="task-cancel-edit" style="width:100%;margin-top:0.5rem;display:none;" class="btn-secondary" onclick="app.cancelTaskEdit()">İptal</button>
                     </form>
                 </div>
                 <div class="card">
@@ -1355,7 +1357,8 @@
                         <input type="text" id="note-tags" placeholder="Örn: matematik, integral" maxlength="200">
                     </div>
                     <div class="form-group"><label>İçerik</label><textarea id="note-content" rows="4" placeholder="Notlarını buraya yaz..." required maxlength="5000"></textarea></div>
-                    <button type="submit">💾 Notu Kaydet</button>
+                    <button type="submit" id="note-submit-btn">💾 Notu Kaydet</button>
+                    <button type="button" id="note-cancel-edit" class="btn-secondary" style="margin-left:0.5rem;display:none;" onclick="app.cancelNoteEdit()">İptal</button>
                 </form>
             </div>
             <div class="card">
@@ -1529,7 +1532,7 @@
                     <button type="button" id="api-key-toggle" onclick="app.toggleApiKeyVisibility()" title="Göster/Gizle"
                         style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;font-size:1.1rem;line-height:1;">👁️</button>
                 </div>
-                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar yalnızca tarayıcınızda saklanır, hiçbir yere gönderilmez.</p>
+                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.</p>
             </div>
 
             <div class="form-group">
@@ -1572,6 +1575,7 @@
     <script>
     const app = {
         data: {
+            schemaVersion: 3,
             theme: 'dark',
             schedule: [],
             tasks: [],
@@ -1599,6 +1603,11 @@
         fc: { currentDeck: '', currentIndex: 0, studyCards: [] },
         fabOpen: false,
         _activeTab: 'dashboard',
+        _storageHealthy: true,
+        _storageWarningShown: false,
+        editingScheduleId: null,
+        editingTaskId: null,
+        editingNoteId: null,
 
         quotes: [
             { text: "Eğitim en güçlü silahınızdır, dünyayı değiştirmek için kullanabilirsiniz.", author: "Nelson Mandela" },
@@ -1624,7 +1633,9 @@
             this.initGPA();
             this.loadPomoStats();
 
-            const today = new Date().toISOString().split('T')[0];
+            try { localStorage.removeItem('OgrenciAsistaniApiKey'); } catch (e) {}
+
+            const today = this.todayKey();
             const taskDate = this.$('task-date');
             if (taskDate) { taskDate.value = today; }
 
@@ -1634,7 +1645,7 @@
             this.renderStudyLog();
 
             setInterval(() => this.updateDateAndGreeting(), 60000);
-            setInterval(() => this.saveData(), 30000);
+            this.bindEventDelegation();
 
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '8') {
@@ -1657,6 +1668,85 @@
         // ═════════ HELPERS ═════════
         $(id) { return document.getElementById(id); },
 
+        makeId(offset = 0) {
+            return Date.now() + offset + Math.floor(Math.random() * 1000);
+        },
+
+        todayKey(date = new Date()) {
+            const d = date instanceof Date ? date : new Date(date);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        },
+
+        isDateKey(value) {
+            return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+        },
+
+        dateFromKey(value) {
+            if (!this.isDateKey(value)) return null;
+            const [y, m, d] = value.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        },
+
+        formatDateKey(value) {
+            const d = this.dateFromKey(value);
+            return d ? d.toLocaleDateString('tr-TR') : '';
+        },
+
+        daysBetween(fromKey, toKey) {
+            const from = this.dateFromKey(fromKey);
+            const to = this.dateFromKey(toKey);
+            if (!from || !to) return 0;
+            return Math.ceil((to - from) / 86400000);
+        },
+
+        safeText(value, max = 200) {
+            return String(value ?? '').trim().slice(0, max);
+        },
+
+        safeInt(value, fallback = 0, max = 100000) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n < 0) return fallback;
+            return Math.min(Math.floor(n), max);
+        },
+
+        safeId(value, offset = 0) {
+            const n = Number(value);
+            return Number.isFinite(n) && n > 0 ? Math.floor(n) : this.makeId(offset);
+        },
+
+        normalizeTime(value) {
+            const text = String(value ?? '').trim();
+            const m = text.match(/^(\d{1,2})[:.](\d{2})$/);
+            if (!m) return '';
+            const h = Number(m[1]), min = Number(m[2]);
+            if (h < 0 || h > 23 || min < 0 || min > 59) return '';
+            return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        },
+
+        isValidTimeRange(start, end) {
+            return !!start && !!end && start < end;
+        },
+
+        safeColor(value) {
+            const color = String(value ?? '').trim();
+            return /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#4f46e5';
+        },
+
+        safeCredit(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n <= 0 || n > 10) return '';
+            return String(n);
+        },
+
+        safeGrade(value) {
+            const allowed = ['4.0','3.5','3.0','2.5','2.0','1.5','1.0','0.0'];
+            const text = String(value ?? '');
+            return allowed.includes(text) ? text : '';
+        },
+
         escapeHtml(text) {
             if (!text) return '';
             const d = document.createElement('div');
@@ -1666,35 +1756,252 @@
 
         escapeAttr(text) {
             if (!text) return '';
-            return text.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         },
 
         // ═════════ DATA ═════════
+        defaultData() {
+            return {
+                schemaVersion: 3,
+                theme: 'dark',
+                schedule: [],
+                tasks: [],
+                notes: [],
+                gpaRows: [],
+                flashcards: [],
+                habits: [],
+                studyLog: []
+            };
+        },
+
+        normalizeSchedule(list) {
+            const validDays = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
+            if (!Array.isArray(list)) return [];
+            return list.map((it, idx) => {
+                if (!it || typeof it !== 'object') return null;
+                const day = validDays.includes(it.day) ? it.day : '';
+                const name = this.safeText(it.name, 100);
+                const start = this.normalizeTime(it.start);
+                const end = this.normalizeTime(it.end);
+                if (!day || !name || !this.isValidTimeRange(start, end)) return null;
+                return {
+                    id: this.safeId(it.id, idx),
+                    day,
+                    name,
+                    teacher: this.safeText(it.teacher, 100),
+                    start,
+                    end,
+                    color: this.safeColor(it.color)
+                };
+            }).filter(Boolean);
+        },
+
+        normalizeTasks(list) {
+            const validTypes = ['📝 Ödev','⚠️ Sınav','📌 Proje','📖 Okuma'];
+            const validPriorities = ['high','normal','low'];
+            if (!Array.isArray(list)) return [];
+            return list.map((it, idx) => {
+                if (!it || typeof it !== 'object') return null;
+                const name = this.safeText(it.name, 150);
+                const date = this.isDateKey(it.date) ? it.date : '';
+                if (!name || !date) return null;
+                return {
+                    id: this.safeId(it.id, idx),
+                    type: validTypes.includes(it.type) ? it.type : '📝 Ödev',
+                    name,
+                    course: this.safeText(it.course, 100),
+                    date,
+                    priority: validPriorities.includes(it.priority) ? it.priority : 'normal',
+                    desc: this.safeText(it.desc, 500),
+                    completed: !!it.completed,
+                    completedDate: this.isDateKey(it.completedDate) ? it.completedDate : null
+                };
+            }).filter(Boolean);
+        },
+
+        normalizeNotes(list) {
+            if (!Array.isArray(list)) return [];
+            return list.map((it, idx) => {
+                if (!it || typeof it !== 'object') return null;
+                const title = this.safeText(it.title, 150);
+                const content = this.safeText(it.content, 5000);
+                if (!title) return null;
+                const tags = Array.isArray(it.tags) ? it.tags : String(it.tags || '').split(',');
+                return {
+                    id: this.safeId(it.id, idx),
+                    title,
+                    category: this.safeText(it.category || '📚 Ders Notu', 50),
+                    tags: tags.map(t => this.safeText(t, 40)).filter(Boolean).slice(0, 20),
+                    content,
+                    date: this.safeText(it.date || new Date().toLocaleDateString('tr-TR'), 30),
+                    updated: this.safeText(it.updated || new Date().toISOString(), 40)
+                };
+            }).filter(Boolean);
+        },
+
+        normalizeGpaRows(list) {
+            if (!Array.isArray(list)) return [];
+            return list.map(it => ({
+                name: this.safeText(it?.name, 100),
+                credit: this.safeCredit(it?.credit),
+                grade: this.safeGrade(it?.grade)
+            }));
+        },
+
+        normalizeFlashcards(list) {
+            if (!Array.isArray(list)) return [];
+            return list.map((it, idx) => {
+                if (!it || typeof it !== 'object') return null;
+                const deck = this.safeText(it.deck, 100);
+                const front = this.safeText(it.front, 500);
+                const back = this.safeText(it.back, 500);
+                if (!deck || !front || !back) return null;
+                return {
+                    id: this.safeId(it.id, idx),
+                    deck,
+                    front,
+                    back,
+                    correct: this.safeInt(it.correct, 0, 100000),
+                    wrong: this.safeInt(it.wrong, 0, 100000)
+                };
+            }).filter(Boolean);
+        },
+
+        normalizeHabits(list) {
+            if (!Array.isArray(list)) return [];
+            return list.map((it, idx) => {
+                if (!it || typeof it !== 'object') return null;
+                const name = this.safeText(it.name, 100);
+                if (!name) return null;
+                const checks = {};
+                if (it.checks && typeof it.checks === 'object') {
+                    Object.entries(it.checks).forEach(([date, checked]) => {
+                        if (this.isDateKey(date) && checked === true) checks[date] = true;
+                    });
+                }
+                return {
+                    id: this.safeId(it.id, idx),
+                    name,
+                    icon: this.safeText(it.icon || '📖', 8),
+                    checks
+                };
+            }).filter(Boolean);
+        },
+
+        normalizeStudyLog(list) {
+            if (!Array.isArray(list)) return [];
+            return list.map(it => {
+                if (!it || typeof it !== 'object') return null;
+                const date = this.isDateKey(it.date) ? it.date : '';
+                const minutes = this.safeInt(it.minutes, 0, 600);
+                if (!date || minutes <= 0) return null;
+                return {
+                    date,
+                    time: this.safeText(it.time, 10),
+                    minutes,
+                    subject: this.safeText(it.subject, 100),
+                    type: it.type === 'break' ? 'break' : 'work'
+                };
+            }).filter(Boolean);
+        },
+
+        normalizePomoStats(input = {}) {
+            const p = input && typeof input === 'object' ? input : {};
+            const weekSessions = {};
+            if (p.weekSessions && typeof p.weekSessions === 'object') {
+                Object.entries(p.weekSessions).forEach(([date, count]) => {
+                    if (this.isDateKey(date)) weekSessions[date] = this.safeInt(count, 0, 1000);
+                });
+            }
+            return {
+                sessions: this.safeInt(p.sessions, 0, 100000),
+                totalMinutes: this.safeInt(p.totalMinutes, 0, 10000000),
+                todaySessions: this.safeInt(p.todaySessions, 0, 1000),
+                todayDate: this.isDateKey(p.todayDate) ? p.todayDate : '',
+                weekSessions
+            };
+        },
+
+        normalizeData(input = {}) {
+            const src = input && typeof input === 'object' ? input : {};
+            return {
+                ...this.defaultData(),
+                theme: src.theme === 'light' ? 'light' : 'dark',
+                schedule: this.normalizeSchedule(src.schedule),
+                tasks: this.normalizeTasks(src.tasks),
+                notes: this.normalizeNotes(src.notes),
+                gpaRows: this.normalizeGpaRows(src.gpaRows),
+                flashcards: this.normalizeFlashcards(src.flashcards),
+                habits: this.normalizeHabits(src.habits),
+                studyLog: this.normalizeStudyLog(src.studyLog)
+            };
+        },
+
+        extractImportPatch(imported) {
+            const patch = {};
+            let recognized = false;
+            if (imported.theme === 'light' || imported.theme === 'dark') {
+                patch.theme = imported.theme;
+                recognized = true;
+            }
+            ['schedule','tasks','notes','gpaRows','flashcards','habits','studyLog'].forEach(key => {
+                if (Array.isArray(imported[key])) {
+                    patch[key] = imported[key];
+                    recognized = true;
+                }
+            });
+            return { patch, recognized };
+        },
+
         loadData() {
             try {
                 const v3 = localStorage.getItem('OgrenciAsistaniData_v3');
-                if (v3) { this.data = { ...this.data, ...JSON.parse(v3) }; return; }
                 const v2 = localStorage.getItem('OgrenciAsistaniData_v2');
-                if (v2) { this.data = { ...this.data, ...JSON.parse(v2) }; }
-            } catch (e) { console.error("Veri yükleme hatası:", e); }
-            // Ensure arrays
-            ['schedule','tasks','notes','gpaRows','flashcards','habits','studyLog'].forEach(k => {
-                if (!Array.isArray(this.data[k])) this.data[k] = [];
-            });
+                const raw = v3 || v2;
+                this.data = raw ? this.normalizeData(JSON.parse(raw)) : this.normalizeData(this.data);
+                this._storageHealthy = true;
+            } catch (e) {
+                console.error("Veri yükleme hatası:", e);
+                this.data = this.normalizeData({});
+                this._storageHealthy = false;
+                this.showToast('Kayıtlı veri okunamadı. Eski verinin üstüne yazmamak için kaydetme durduruldu; lütfen sağlam bir yedek JSON içe aktarın.', 'error');
+            }
         },
 
         saveData() {
-            try { localStorage.setItem('OgrenciAsistaniData_v3', JSON.stringify(this.data)); }
-            catch (e) { this.showToast('Veri kaydetme hatası! Depolama alanı dolu olabilir.', 'error'); }
+            if (!this._storageHealthy) {
+                if (!this._storageWarningShown) {
+                    this.showToast('Veri kaydedilmedi: kayıtlı veri bozuk olabilir. Önce yedek JSON içe aktarın veya depolamayı temizleyin.', 'warning');
+                    this._storageWarningShown = true;
+                }
+                return false;
+            }
+            try {
+                this.data = this.normalizeData(this.data);
+                localStorage.setItem('OgrenciAsistaniData_v3', JSON.stringify(this.data));
+                return true;
+            }
+            catch (e) { this.showToast('Veri kaydetme hatası! Depolama alanı dolu olabilir.', 'error'); return false; }
+        },
+
+        getPomoStatsPayload() {
+            return this.normalizePomoStats({
+                sessions: this.pomo.sessions,
+                totalMinutes: this.pomo.totalMinutes,
+                todaySessions: this.pomo.todaySessions,
+                todayDate: this.pomo.todayDate,
+                weekSessions: this.pomo.weekSessions
+            });
         },
 
         exportData() {
             try {
-                const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
+                const payload = { ...this.normalizeData(this.data), pomoStats: this.getPomoStatsPayload() };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `ogrenci-asistani-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `ogrenci-asistani-${this.todayKey()}.json`;
                 document.body.appendChild(a); a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
@@ -1710,20 +2017,24 @@
                 try {
                     const imported = JSON.parse(e.target.result);
                     if (typeof imported !== 'object' || imported === null) throw new Error('Geçersiz format');
-                    const validKeys = ['theme','schedule','tasks','notes','gpaRows','flashcards','habits','studyLog'];
-                    const filtered = {};
-                    for (const key of validKeys) {
-                        if (key in imported) filtered[key] = imported[key];
+                    const { patch, recognized } = this.extractImportPatch(imported);
+                    const hasPomoStats = imported.pomoStats && typeof imported.pomoStats === 'object';
+                    if (!recognized && !hasPomoStats) throw new Error('Tanınan veri bulunamadı');
+                    this.data = this.normalizeData({ ...this.data, ...patch });
+                    this._storageHealthy = true;
+                    this._storageWarningShown = false;
+                    if (hasPomoStats) {
+                        Object.assign(this.pomo, this.normalizePomoStats(imported.pomoStats));
+                        this.savePomoStats();
                     }
-                    if (!Object.keys(filtered).length) throw new Error('Tanınan veri bulunamadı');
-                    this.data = { ...this.data, ...filtered };
-                    ['schedule','tasks','notes','gpaRows','flashcards','habits','studyLog'].forEach(k => {
-                        if (!Array.isArray(this.data[k])) this.data[k] = [];
-                    });
                     this.saveData();
+                    this.applyTheme();
                     this.refreshAllViews();
                     this.updateTaskBadge();
                     this.initGPA();
+                    this.updatePomoStats();
+                    this.renderPomoStreak();
+                    this.renderStudyLog();
                     this.showToast('Veriler yüklendi!', 'success');
                 } catch (err) { this.showToast('Geçersiz dosya!', 'error'); }
             };
@@ -1806,6 +2117,17 @@
             this.renderHabits();
         },
 
+        bindEventDelegation() {
+            const deckList = this.$('fc-deck-list');
+            if (deckList && !deckList.dataset.bound) {
+                deckList.dataset.bound = '1';
+                deckList.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-delete-deck]');
+                    if (btn) this.deleteDeck(btn.dataset.deleteDeck);
+                });
+            }
+        },
+
         showToast(message, type = 'info') {
             const container = this.$('toast-container');
             if (!container) return;
@@ -1875,7 +2197,7 @@
             this.updateDateAndGreeting();
             this.renderDailyQuote();
             const todayName = this.getDayName();
-            const todayYMD = new Date().toISOString().split('T')[0];
+            const todayYMD = this.todayKey();
             const todayClasses = this.data.schedule.filter(c => c.day === todayName);
             const activeTasks = this.data.tasks.filter(t => !t.completed);
             const overdueTasks = this.data.tasks.filter(t => !t.completed && t.date < todayYMD);
@@ -1923,14 +2245,14 @@
                     overdueTasks.sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3).forEach(t => {
                         h += `<div class="list-item" style="border-left-color:var(--danger);background:var(--danger-light);">
                             <div class="list-item-content"><h4>🚨 ${this.escapeHtml(t.name)}</h4>
-                            <p style="color:var(--danger);font-weight:600;">GECİKMİŞ! ${new Date(t.date).toLocaleDateString('tr-TR')}</p></div></div>`;
+                            <p style="color:var(--danger);font-weight:600;">GECİKMİŞ! ${this.formatDateKey(t.date)}</p></div></div>`;
                     });
                     upcoming.forEach(t => {
                         const isT = t.date === todayYMD;
-                        const dl = Math.ceil((new Date(t.date)-new Date(todayYMD))/86400000);
+                        const dl = this.daysBetween(todayYMD, t.date);
                         h += `<div class="list-item" style="border-left-color:${isT?'var(--danger)':dl<=3?'var(--warning)':'var(--primary)'}">
                             <div class="list-item-content"><h4>${this.escapeHtml(t.type)} - ${this.escapeHtml(t.name)}</h4>
-                            <p>📅 ${isT?'<strong style="color:var(--danger)">BUGÜN!</strong>':dl+' gün — '+new Date(t.date).toLocaleDateString('tr-TR')}</p></div></div>`;
+                            <p>📅 ${isT?'<strong style="color:var(--danger)">BUGÜN!</strong>':dl+' gün — '+this.formatDateKey(t.date)}</p></div></div>`;
                     });
                     upDiv.innerHTML = h;
                 }
@@ -1942,12 +2264,12 @@
         renderStudySummary() {
             const div = this.$('dash-study-summary');
             if (!div) return;
-            const todayYMD = new Date().toISOString().split('T')[0];
+            const todayYMD = this.todayKey();
             const log = this.data.studyLog || [];
             const todayLog = log.filter(l => l.date === todayYMD);
             const todayMin = todayLog.reduce((s,l) => s + (l.minutes||0), 0);
-            const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-            const weekYMD = weekAgo.toISOString().split('T')[0];
+            const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6);
+            const weekYMD = this.todayKey(weekAgo);
             const weekMin = log.filter(l => l.date >= weekYMD).reduce((s,l) => s + (l.minutes||0), 0);
             const habits = this.data.habits || [];
             const habitsToday = habits.filter(h => (h.checks||{})[todayYMD]).length;
@@ -2006,8 +2328,9 @@
             const s = this.$('class-start').value;
             const en = this.$('class-end').value;
             if (s >= en) { this.showToast('Bitiş saati başlangıçtan sonra olmalı!', 'warning'); return; }
+            const editingId = this.editingScheduleId;
             const nc = {
-                id: Date.now(),
+                id: editingId || this.makeId(),
                 day: this.$('class-day').value,
                 name: this.$('class-name').value.trim(),
                 teacher: this.$('class-teacher').value.trim(),
@@ -2016,12 +2339,19 @@
             };
             if (!nc.name) { this.showToast('Ders adı boş olamaz!', 'warning'); return; }
             const conflict = this.data.schedule.find(c =>
-                c.day === nc.day && !(nc.end <= c.start || nc.start >= c.end)
+                c.id !== editingId && c.day === nc.day && !(nc.end <= c.start || nc.start >= c.end)
             );
             if (conflict) { this.showToast(`"${conflict.name}" ile çakışma var!`, 'warning'); return; }
-            this.data.schedule.push(nc);
+            if (editingId) {
+                const idx = this.data.schedule.findIndex(x => x.id === editingId);
+                if (idx >= 0) this.data.schedule[idx] = nc;
+                else this.data.schedule.push(nc);
+            } else {
+                this.data.schedule.push(nc);
+            }
             this.saveData(); this.renderScheduleList(); this.renderDashboard();
-            e.target.reset(); this.showToast(`"${nc.name}" eklendi!`, 'success');
+            this.resetScheduleForm();
+            this.showToast(`"${nc.name}" ${editingId ? 'güncellendi' : 'eklendi'}!`, 'success');
         },
 
         deleteClass(id) {
@@ -2036,17 +2366,34 @@
         editSchedule(id) {
             const c = this.data.schedule.find(x => x.id === id);
             if (!c) return;
+            this.editingScheduleId = id;
             this.$('class-day').value = c.day;
             this.$('class-name').value = c.name;
             this.$('class-teacher').value = c.teacher || '';
             this.$('class-start').value = c.start;
             this.$('class-end').value = c.end;
             this.$('class-color').value = c.color || '#4f46e5';
-            this.data.schedule = this.data.schedule.filter(x => x.id !== id);
-            this.saveData(); this.renderScheduleList(); this.renderDashboard();
+            const submit = this.$('class-submit-btn');
+            const cancel = this.$('class-cancel-edit');
+            if (submit) submit.textContent = '💾 Dersi Güncelle';
+            if (cancel) cancel.style.display = 'inline-flex';
             this.showToast('Düzenleme modunda.', 'info');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             this.$('class-name').focus();
+        },
+
+        resetScheduleForm() {
+            this.editingScheduleId = null;
+            this.$('form-class')?.reset();
+            const submit = this.$('class-submit-btn');
+            const cancel = this.$('class-cancel-edit');
+            if (submit) submit.textContent = '➕ Dersi Ekle';
+            if (cancel) cancel.style.display = 'none';
+        },
+
+        cancelScheduleEdit() {
+            this.resetScheduleForm();
+            this.showToast('Düzenleme iptal edildi.', 'info');
         },
 
         renderScheduleList() {
@@ -2077,8 +2424,6 @@
         openImportModal() {
             const modal = this.$('import-modal');
             if (!modal) return;
-            const saved = localStorage.getItem('OgrenciAsistaniApiKey');
-            if (saved) { const k = this.$('import-api-key'); if (k) k.value = saved; }
             modal.style.display = 'flex';
         },
 
@@ -2118,6 +2463,9 @@
             if (!file.type.startsWith('image/')) {
                 this.showToast('Lütfen bir resim dosyası seçin!', 'warning'); return;
             }
+            if (file.size > 8 * 1024 * 1024) {
+                this.showToast('Fotoğraf 8 MB altında olmalı.', 'warning'); return;
+            }
             this._importFile = file;
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -2135,8 +2483,6 @@
             const apiKey = this.$('import-api-key')?.value.trim();
             if (!apiKey) { this.showToast('Lütfen Claude API anahtarını girin!', 'warning'); return; }
             if (!this._importFile) { this.showToast('Lütfen bir fotoğraf seçin!', 'warning'); return; }
-
-            localStorage.setItem('OgrenciAsistaniApiKey', apiKey);
 
             const btn = this.$('import-analyze-btn');
             if (btn) { btn.disabled = true; btn.innerHTML = '<span class="import-spinner"></span> Analiz ediliyor...'; }
@@ -2204,27 +2550,28 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
 
                 const validDays = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
                 const colorPalette = ['#4f46e5','#10b981','#ef4444','#f59e0b','#3b82f6','#ec4899'];
-                const timeRe = /^\d{2}:\d{2}$/;
 
                 const valid = parsed
-                    .filter(it => it && it.day && it.name && it.start && it.end && validDays.includes(it.day))
                     .map((it, idx) => {
-                        const start = timeRe.test(it.start) ? it.start : it.start.replace(/(\d{1,2})[:\.](\d{2})/, (_,h,m) => `${h.padStart(2,'0')}:${m}`);
-                        const end   = timeRe.test(it.end)   ? it.end   : it.end.replace(/(\d{1,2})[:\.](\d{2})/, (_,h,m) => `${h.padStart(2,'0')}:${m}`);
+                        if (!it || typeof it !== 'object' || !validDays.includes(it.day)) return null;
+                        const name = this.safeText(it.name, 100);
+                        const start = this.normalizeTime(it.start);
+                        const end = this.normalizeTime(it.end);
+                        if (!name || !this.isValidTimeRange(start, end)) return null;
                         const hasConflict = !!this.data.schedule.find(c =>
                             c.day === it.day && !(end <= c.start || start >= c.end)
                         );
                         return {
-                            id: Date.now() + idx,
+                            id: this.makeId(idx),
                             day: it.day,
-                            name: String(it.name).trim().substring(0, 100),
-                            teacher: String(it.teacher || '').trim().substring(0, 100),
+                            name,
+                            teacher: this.safeText(it.teacher, 100),
                             start, end,
                             color: colorPalette[idx % colorPalette.length],
                             _selected: !hasConflict,
                             _conflict: hasConflict
                         };
-                    });
+                    }).filter(Boolean);
 
                 if (valid.length === 0) throw new Error('Geçerli formatta ders bulunamadı. Lütfen fotoğrafı kontrol edin.');
 
@@ -2309,7 +2656,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 );
                 if (conflict) { skipped++; return; }
                 this.data.schedule.push({
-                    id: Date.now() + idx,
+                    id: this.makeId(idx),
                     day: item.day, name: item.name, teacher: item.teacher,
                     start: item.start, end: item.end, color: item.color
                 });
@@ -2333,29 +2680,42 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             e.preventDefault();
             const name = this.$('task-name').value.trim();
             if (!name) { this.showToast('Görev adı boş olamaz!', 'warning'); return; }
+            const taskDate = this.$('task-date').value;
+            if (!this.isDateKey(taskDate)) { this.showToast('Geçerli bir tarih seçin.', 'warning'); return; }
+            const editingId = this.editingTaskId;
             const nt = {
-                id: Date.now(),
+                id: editingId || this.makeId(),
                 type: this.$('task-type').value,
                 name: name,
                 course: this.$('task-course').value.trim(),
-                date: this.$('task-date').value,
+                date: taskDate,
                 priority: this.$('task-priority').value,
                 desc: this.$('task-desc').value.trim(),
                 completed: false,
                 completedDate: null
             };
-            this.data.tasks.push(nt);
+            if (editingId) {
+                const existing = this.data.tasks.find(x => x.id === editingId);
+                if (existing) {
+                    nt.completed = !!existing.completed;
+                    nt.completedDate = existing.completedDate || null;
+                }
+                const idx = this.data.tasks.findIndex(x => x.id === editingId);
+                if (idx >= 0) this.data.tasks[idx] = nt;
+                else this.data.tasks.push(nt);
+            } else {
+                this.data.tasks.push(nt);
+            }
             this.saveData(); this.renderTasksList(); this.renderDashboard(); this.updateTaskBadge();
-            e.target.reset();
-            this.$('task-date').value = new Date().toISOString().split('T')[0];
-            this.showToast(`"${nt.name}" eklendi!`, 'success');
+            this.resetTaskForm();
+            this.showToast(`"${nt.name}" ${editingId ? 'güncellendi' : 'eklendi'}!`, 'success');
         },
 
         toggleTask(id) {
             const t = this.data.tasks.find(x => x.id === id);
             if (!t) return;
             t.completed = !t.completed;
-            t.completedDate = t.completed ? new Date().toISOString().split('T')[0] : null;
+            t.completedDate = t.completed ? this.todayKey() : null;
             this.saveData(); this.renderTasksList(); this.renderDashboard(); this.updateTaskBadge();
             if (t.completed) { this.showToast('✅ Tamamlandı!', 'success'); this.showConfetti(); }
             else this.showToast('🔄 Aktif.', 'info');
@@ -2373,17 +2733,36 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         editTask(id) {
             const t = this.data.tasks.find(x => x.id === id);
             if (!t) return;
+            this.editingTaskId = id;
             this.$('task-type').value = t.type;
             this.$('task-name').value = t.name;
             this.$('task-course').value = t.course || '';
             this.$('task-date').value = t.date;
             this.$('task-priority').value = t.priority;
             this.$('task-desc').value = t.desc || '';
-            this.data.tasks = this.data.tasks.filter(x => x.id !== id);
-            this.saveData(); this.renderTasksList(); this.renderDashboard(); this.updateTaskBadge();
+            const submit = this.$('task-submit-btn');
+            const cancel = this.$('task-cancel-edit');
+            if (submit) submit.textContent = '💾 Görevi Güncelle';
+            if (cancel) cancel.style.display = 'inline-flex';
             this.showToast('Düzenleme modunda.', 'info');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             this.$('task-name').focus();
+        },
+
+        resetTaskForm() {
+            this.editingTaskId = null;
+            this.$('form-task')?.reset();
+            const taskDate = this.$('task-date');
+            if (taskDate) taskDate.value = this.todayKey();
+            const submit = this.$('task-submit-btn');
+            const cancel = this.$('task-cancel-edit');
+            if (submit) submit.textContent = '➕ Görevi Ekle';
+            if (cancel) cancel.style.display = 'none';
+        },
+
+        cancelTaskEdit() {
+            this.resetTaskForm();
+            this.showToast('Düzenleme iptal edildi.', 'info');
         },
 
         clearCompletedTasks() {
@@ -2413,7 +2792,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             if (!filterEl || !sortEl) return;
             const filter = filterEl.value;
             const sort = sortEl.value;
-            const todayYMD = new Date().toISOString().split('T')[0];
+            const todayYMD = this.todayKey();
 
             let tasks = [...this.data.tasks];
             if (filter === 'active') tasks = tasks.filter(t => !t.completed);
@@ -2431,12 +2810,12 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             div.innerHTML = tasks.map(t => {
                 const overdue = !t.completed && t.date < todayYMD;
                 const isT = t.date === todayYMD;
-                const dl = Math.ceil((new Date(t.date)-new Date(todayYMD))/86400000);
+                const dl = this.daysBetween(todayYMD, t.date);
                 const bc = t.completed ? 'var(--secondary)' : overdue ? 'var(--danger)' : t.priority==='high' ? 'var(--warning)' : 'var(--primary)';
                 return `<div class="list-item ${t.completed?'completed':''}" style="border-left-color:${bc};${overdue?'background:var(--danger-light);':''}">
                     <div class="list-item-content">
                         <h4>${this.escapeHtml(t.type)} ${this.escapeHtml(t.name)} ${t.priority==='high'&&!t.completed?'🔥':''} ${overdue?'<span style="color:var(--danger);font-size:0.78em;">GECİKMİŞ</span>':''}</h4>
-                        <p>📅 ${isT&&!t.completed?'<strong style="color:var(--danger)">BUGÜN!</strong>':new Date(t.date).toLocaleDateString('tr-TR')} ${!t.completed&&!overdue&&dl>0?'('+dl+' gün)':''} ${t.course?'| 📚 '+this.escapeHtml(t.course):''}</p>
+                        <p>📅 ${isT&&!t.completed?'<strong style="color:var(--danger)">BUGÜN!</strong>':this.formatDateKey(t.date)} ${!t.completed&&!overdue&&dl>0?'('+dl+' gün)':''} ${t.course?'| 📚 '+this.escapeHtml(t.course):''}</p>
                         ${t.desc ? `<p style="font-size:0.78rem;margin-top:3px;opacity:0.7;">${this.escapeHtml(t.desc).substring(0,120)}</p>` : ''}
                     </div>
                     <div class="list-item-actions">
@@ -2452,18 +2831,29 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             e.preventDefault();
             const title = this.$('note-title').value.trim();
             if (!title) { this.showToast('Başlık boş olamaz!', 'warning'); return; }
+            const content = this.$('note-content').value.trim();
+            if (!content) { this.showToast('Not içeriği boş olamaz!', 'warning'); return; }
+            const editingId = this.editingNoteId;
             const n = {
-                id: Date.now(),
+                id: editingId || this.makeId(),
                 title: title,
                 category: this.$('note-category').value,
                 tags: (this.$('note-tags').value||'').split(',').map(t=>t.trim()).filter(Boolean),
-                content: this.$('note-content').value.trim(),
+                content,
                 date: new Date().toLocaleDateString('tr-TR'),
                 updated: new Date().toISOString()
             };
-            this.data.notes.push(n);
-            this.saveData(); this.renderNotesList(); e.target.reset();
-            this.showToast('Not kaydedildi!', 'success');
+            if (editingId) {
+                const existing = this.data.notes.find(x => x.id === editingId);
+                if (existing) n.date = existing.date || n.date;
+                const idx = this.data.notes.findIndex(x => x.id === editingId);
+                if (idx >= 0) this.data.notes[idx] = n;
+                else this.data.notes.push(n);
+            } else {
+                this.data.notes.push(n);
+            }
+            this.saveData(); this.renderNotesList(); this.resetNoteForm();
+            this.showToast(editingId ? 'Not güncellendi!' : 'Not kaydedildi!', 'success');
         },
 
         deleteNote(id) {
@@ -2478,15 +2868,32 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         editNote(id) {
             const n = this.data.notes.find(x => x.id === id);
             if (!n) return;
+            this.editingNoteId = id;
             this.$('note-title').value = n.title;
             this.$('note-content').value = n.content;
             this.$('note-category').value = n.category || '📚 Ders Notu';
             this.$('note-tags').value = (n.tags||[]).join(', ');
-            this.data.notes = this.data.notes.filter(x => x.id !== id);
-            this.saveData(); this.renderNotesList();
+            const submit = this.$('note-submit-btn');
+            const cancel = this.$('note-cancel-edit');
+            if (submit) submit.textContent = '💾 Notu Güncelle';
+            if (cancel) cancel.style.display = 'inline-flex';
             this.showToast('Düzenleme modunda.', 'info');
             this.$('note-title').focus();
             this.$('main-content').scrollTop = 0;
+        },
+
+        resetNoteForm() {
+            this.editingNoteId = null;
+            this.$('form-note')?.reset();
+            const submit = this.$('note-submit-btn');
+            const cancel = this.$('note-cancel-edit');
+            if (submit) submit.textContent = '💾 Notu Kaydet';
+            if (cancel) cancel.style.display = 'none';
+        },
+
+        cancelNoteEdit() {
+            this.resetNoteForm();
+            this.showToast('Düzenleme iptal edildi.', 'info');
         },
 
         copyNote(id) {
@@ -2553,7 +2960,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             const front = this.$('fc-front').value.trim();
             const back = this.$('fc-back').value.trim();
             if (!deck || !front || !back) { this.showToast('Tüm alanları doldurun!', 'warning'); return; }
-            this.data.flashcards.push({ id: Date.now(), deck, front, back, correct: 0, wrong: 0 });
+            this.data.flashcards.push({ id: this.makeId(), deck, front, back, correct: 0, wrong: 0 });
             this.saveData(); this.renderFlashcardDecks(); e.target.reset();
             this.showToast('Kart eklendi!', 'success');
         },
@@ -2575,7 +2982,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             deckListDiv.innerHTML = Object.entries(decks).map(([name, cards]) => `
                 <div class="list-item" style="border-left-color:var(--primary);margin-bottom:0.35rem;">
                     <div class="list-item-content"><h4>${this.escapeHtml(name)}</h4><p>${cards.length} kart</p></div>
-                    <button type="button" class="btn-danger btn-small" onclick="app.deleteDeck(${JSON.stringify(this.escapeAttr(name))})">🗑️</button>
+                    <button type="button" class="btn-danger btn-small" data-delete-deck="${this.escapeAttr(name)}">🗑️</button>
                 </div>`).join('');
 
             const prev = deckSelect.value;
@@ -2673,7 +3080,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             const name = this.$('habit-name').value.trim();
             if (!name) { this.showToast('Alışkanlık adı boş olamaz!', 'warning'); return; }
             this.data.habits.push({
-                id: Date.now(),
+                id: this.makeId(),
                 name: name,
                 icon: this.$('habit-icon').value,
                 checks: {}
@@ -2711,7 +3118,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             const checks = habit.checks || {};
             for (let i = 0; i < 365; i++) {
                 const d = new Date(today); d.setDate(d.getDate()-i);
-                if (checks[d.toISOString().split('T')[0]]) streak++; else break;
+                if (checks[this.todayKey(d)]) streak++; else break;
             }
             return streak;
         },
@@ -2725,7 +3132,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 return;
             }
             const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
+            const todayStr = this.todayKey(today);
             const dayLabels = ['Pz','Pt','Sa','Ça','Pe','Cu','Ct'];
 
             div.innerHTML = habits.map(h => {
@@ -2734,7 +3141,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 let daysHtml = '';
                 for (let i = 6; i >= 0; i--) {
                     const d = new Date(today); d.setDate(d.getDate()-i);
-                    const ds = d.toISOString().split('T')[0];
+                    const ds = this.todayKey(d);
                     const checked = (h.checks||{})[ds];
                     daysHtml += `<div class="habit-day ${checked?'checked':''} ${i===0?'today':''}" onclick="app.toggleHabitDay(${h.id},'${ds}')" title="${d.toLocaleDateString('tr-TR')}">${checked?'✓':dayLabels[d.getDay()]}</div>`;
                 }
@@ -2757,20 +3164,28 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             if (!this.data.gpaRows.length) this.data.gpaRows = [{name:'',credit:'',grade:''},{name:'',credit:'',grade:''},{name:'',credit:'',grade:''}];
             this.renderGPARows();
         },
-        addGPARow() { this.data.gpaRows.push({name:'',credit:'',grade:''}); this.renderGPARows(); },
-        removeGPARow(i) { if (this.data.gpaRows.length <= 1) return; this.data.gpaRows.splice(i,1); this.renderGPARows(); },
+        addGPARow() { this.data.gpaRows.push({name:'',credit:'',grade:''}); this.saveData(); this.renderGPARows(); },
+        removeGPARow(i) { if (this.data.gpaRows.length <= 1) return; this.data.gpaRows.splice(i,1); this.saveData(); this.renderGPARows(); },
+
+        updateGPARow(i, field, value) {
+            if (!this.data.gpaRows[i]) return;
+            if (field === 'name') this.data.gpaRows[i].name = this.safeText(value, 100);
+            else if (field === 'credit') this.data.gpaRows[i].credit = this.safeCredit(value);
+            else if (field === 'grade') this.data.gpaRows[i].grade = this.safeGrade(value);
+            this.saveData();
+        },
 
         renderGPARows() {
             const el = this.$('gpa-courses');
             if (!el) return;
             el.innerHTML = this.data.gpaRows.map((r,i) => `
                 <div class="grade-row">
-                    <input type="text" placeholder="Ders" value="${this.escapeAttr(r.name)}" onchange="app.data.gpaRows[${i}].name=this.value" style="flex:2;min-width:0;">
-                    <input type="number" placeholder="Kr" min="1" max="10" value="${r.credit}" onchange="app.data.gpaRows[${i}].credit=this.value" style="flex:0.6;min-width:50px;">
-                    <select onchange="app.data.gpaRows[${i}].grade=this.value" style="flex:0.9;min-width:60px;">
+                    <input type="text" placeholder="Ders" value="${this.escapeAttr(r.name)}" onchange="app.updateGPARow(${i},'name',this.value)" style="flex:2;min-width:0;">
+                    <input type="number" placeholder="Kr" min="1" max="10" value="${this.escapeAttr(this.safeCredit(r.credit))}" onchange="app.updateGPARow(${i},'credit',this.value)" style="flex:0.6;min-width:50px;">
+                    <select onchange="app.updateGPARow(${i},'grade',this.value)" style="flex:0.9;min-width:60px;">
                         <option value="">Not</option>
                         ${[['4.0','AA'],['3.5','BA'],['3.0','BB'],['2.5','CB'],['2.0','CC'],['1.5','DC'],['1.0','DD'],['0.0','FF']].map(([v,l])=>
-                            `<option value="${v}" ${r.grade===v?'selected':''}>${l}</option>`).join('')}
+                            `<option value="${v}" ${this.safeGrade(r.grade)===v?'selected':''}>${l}</option>`).join('')}
                     </select>
                     <button type="button" class="btn-danger btn-small" onclick="app.removeGPARow(${i})" ${this.data.gpaRows.length<=1?'disabled':''} style="flex-shrink:0;">✕</button>
                 </div>`).join('');
@@ -2779,8 +3194,10 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         calculateGPA() {
             let tc = 0, tp = 0, details = [];
             this.data.gpaRows.forEach(r => {
-                if (r.credit && r.grade !== '' && r.grade !== undefined) {
-                    const c = parseFloat(r.credit), g = parseFloat(r.grade);
+                const credit = this.safeCredit(r.credit);
+                const grade = this.safeGrade(r.grade);
+                if (credit && grade !== '') {
+                    const c = parseFloat(credit), g = parseFloat(grade);
                     if (isNaN(c) || isNaN(g) || c <= 0) return;
                     tc += c; tp += c * g;
                     details.push({ name: r.name||'İsimsiz', credit: c, grade: g });
@@ -2819,31 +3236,21 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             try {
                 const s = localStorage.getItem('PomoStats_v2');
                 if (s) {
-                    const p = JSON.parse(s);
-                    Object.assign(this.pomo, {
-                        sessions: p.sessions||0,
-                        totalMinutes: p.totalMinutes||0,
-                        todaySessions: p.todaySessions||0,
-                        todayDate: p.todayDate||'',
-                        weekSessions: p.weekSessions||{}
-                    });
+                    Object.assign(this.pomo, this.normalizePomoStats(JSON.parse(s)));
                 }
-                const today = new Date().toISOString().split('T')[0];
+                const today = this.todayKey();
                 if (this.pomo.todayDate !== today) { this.pomo.todaySessions = 0; this.pomo.todayDate = today; }
                 // Clean old
                 const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-14);
-                const cutoffStr = cutoff.toISOString().split('T')[0];
+                const cutoffStr = this.todayKey(cutoff);
                 Object.keys(this.pomo.weekSessions||{}).forEach(k => { if (k < cutoffStr) delete this.pomo.weekSessions[k]; });
                 this.updatePomoStats();
             } catch(e){}
         },
 
         savePomoStats() {
-            try { localStorage.setItem('PomoStats_v2', JSON.stringify({
-                sessions: this.pomo.sessions, totalMinutes: this.pomo.totalMinutes,
-                todaySessions: this.pomo.todaySessions, todayDate: this.pomo.todayDate,
-                weekSessions: this.pomo.weekSessions
-            })); } catch(e){ this.showToast('Pomodoro verileri kaydedilemedi!', 'error'); }
+            try { localStorage.setItem('PomoStats_v2', JSON.stringify(this.getPomoStatsPayload())); }
+            catch(e){ this.showToast('Pomodoro verileri kaydedilemedi!', 'error'); }
         },
 
         updatePomoStats() {
@@ -2866,7 +3273,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             let html = '';
             for (let i = 6; i >= 0; i--) {
                 const d = new Date(today); d.setDate(d.getDate()-i);
-                const ds = d.toISOString().split('T')[0];
+                const ds = this.todayKey(d);
                 const s = (this.pomo.weekSessions||{})[ds]||0;
                 html += `<div class="streak-dot ${s>0?'active':''} ${i===0?'today':''}" title="${d.toLocaleDateString('tr-TR')}: ${s}">${dl[d.getDay()]}</div>`;
             }
@@ -2876,7 +3283,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         renderStudyLog() {
             const div = this.$('pomo-log');
             if (!div) return;
-            const todayYMD = new Date().toISOString().split('T')[0];
+            const todayYMD = this.todayKey();
             const todayLog = (this.data.studyLog||[]).filter(l => l.date === todayYMD).reverse();
             if (!todayLog.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Henüz çalışma kaydı yok.</p></div>'; return; }
             div.innerHTML = todayLog.map(l => `
@@ -2913,7 +3320,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                         this.pomo.sessions++;
                         this.pomo.totalMinutes += this.pomo.mode;
                         this.pomo.todaySessions++;
-                        this.pomo.todayDate = new Date().toISOString().split('T')[0];
+                        this.pomo.todayDate = this.todayKey();
                         if (!this.pomo.weekSessions) this.pomo.weekSessions = {};
                         this.pomo.weekSessions[this.pomo.todayDate] = (this.pomo.weekSessions[this.pomo.todayDate]||0)+1;
 
@@ -2984,7 +3391,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         _sendNotification(body) {
             try {
                 if ('Notification' in window && Notification.permission === 'granted')
-                    new Notification('Pomodoro', { body, icon: '🎓' });
+                    new Notification('Pomodoro', { body, icon: './icon.svg' });
             } catch(e){}
         }
     };
@@ -3002,7 +3409,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
         if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
 
         const DISMISSED_KEY = 'pwa_banner_dismissed';
-        if (sessionStorage.getItem(DISMISSED_KEY)) return;
+        if (localStorage.getItem(DISMISSED_KEY)) return;
 
         const banner = document.getElementById('pwa-install-banner');
         const installBtn = document.getElementById('pwa-install-btn');
@@ -3043,7 +3450,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
 
         app.pwaDismiss = function() {
             if (banner) banner.classList.remove('visible');
-            sessionStorage.setItem(DISMISSED_KEY, '1');
+            localStorage.setItem(DISMISSED_KEY, '1');
         };
 
         // Hide banner after successful install
