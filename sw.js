@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ogrenci-asistani-v2';
+const CACHE_NAME = 'ogrenci-asistani-v3';
 const ASSETS = [
     './',
     './index.html',

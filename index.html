@@ -1526,13 +1526,27 @@
             <p class="import-modal-sub">Ders programı fotoğrafını yükle, yapay zeka otomatik tanıyıp eklesin.</p>
 
             <div class="form-group">
-                <label>Claude API Anahtarı &nbsp;<span style="color:var(--text-muted);font-size:0.78em;">anthropic.com'dan alabilirsiniz</span></label>
+                <label for="import-provider">Yapay Zeka Sağlayıcısı</label>
+                <select id="import-provider" onchange="app.onImportProviderChange()" style="width:100%;">
+                    <option value="claude">Claude (Anthropic) — fotoğraf için önerilir</option>
+                    <option value="deepseek">DeepSeek</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="import-model-group" style="display:none;">
+                <label for="import-model">DeepSeek Modeli</label>
+                <input type="text" id="import-model" value="deepseek-chat" style="width:100%;" autocomplete="off" spellcheck="false">
+                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">⚠️ Fotoğraf okumak için <b>görüntü destekli</b> bir DeepSeek modeli gerekir. Salt metin modelleri (deepseek-chat) görseli işleyemez.</p>
+            </div>
+
+            <div class="form-group">
+                <label id="import-api-key-label" for="import-api-key">Claude API Anahtarı &nbsp;<span id="import-api-key-hint" style="color:var(--text-muted);font-size:0.78em;">anthropic.com'dan alabilirsiniz</span></label>
                 <div style="position:relative;">
                     <input type="password" id="import-api-key" placeholder="sk-ant-api03-..." style="width:100%;padding-right:2.8rem;" autocomplete="off" spellcheck="false">
-                    <button type="button" id="api-key-toggle" onclick="app.toggleApiKeyVisibility()" title="Göster/Gizle"
+                    <button type="button" id="api-key-toggle" onclick="app.toggleApiKeyVisibility()" title="Göster/Gizle" aria-label="API anahtarını göster veya gizle"
                         style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;font-size:1.1rem;line-height:1;">👁️</button>
                 </div>
-                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.</p>
+                <p id="import-api-key-note" style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.</p>
             </div>
 
             <div class="form-group">
@@ -2480,8 +2494,9 @@
         },
 
         async processScheduleImage() {
+            const provider = this.$('import-provider')?.value || 'claude';
             const apiKey = this.$('import-api-key')?.value.trim();
-            if (!apiKey) { this.showToast('Lütfen Claude API anahtarını girin!', 'warning'); return; }
+            if (!apiKey) { this.showToast('Lütfen API anahtarını girin!', 'warning'); return; }
             if (!this._importFile) { this.showToast('Lütfen bir fotoğraf seçin!', 'warning'); return; }
 
             const btn = this.$('import-analyze-btn');
@@ -2496,49 +2511,11 @@
             try {
                 const base64 = await this._fileToBase64(this._importFile);
                 const mediaType = this._importFile.type;
+                const prompt = this._scheduleExtractionPrompt();
 
-                const resp = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-dangerous-direct-browser-access': 'true'
-                    },
-                    body: JSON.stringify({
-                        model: 'claude-haiku-4-5-20251001',
-                        max_tokens: 2048,
-                        messages: [{
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'image',
-                                    source: { type: 'base64', media_type: mediaType, data: base64 }
-                                },
-                                {
-                                    type: 'text',
-                                    text: `Bu görüntüde bir haftalık ders programı var. Tüm dersleri JSON dizisi olarak çıkar. Her ders nesnesi tam olarak şu alanları içermeli:
-- "day": Türkçe gün adı — yalnızca şunlardan biri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma, Cumartesi, Pazar
-- "name": Ders adı (string)
-- "teacher": Öğretmen/hoca adı (string, yoksa boş string "")
-- "start": Başlangıç saati "HH:MM" formatında (örn: "09:00")
-- "end": Bitiş saati "HH:MM" formatında (örn: "10:30")
-
-Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya metin ekleme. Ders programı bulunamazsa boş dizi [] döndür.`
-                                }
-                            ]
-                        }]
-                    })
-                });
-
-                if (!resp.ok) {
-                    const errData = await resp.json().catch(() => ({}));
-                    const msg = errData.error?.message || `API hatası (${resp.status})`;
-                    throw new Error(msg);
-                }
-
-                const result = await resp.json();
-                const text = result.content?.[0]?.text || '';
+                const text = provider === 'deepseek'
+                    ? await this._callDeepSeek(apiKey, base64, mediaType, prompt)
+                    : await this._callClaude(apiKey, base64, mediaType, prompt);
 
                 const jsonMatch = text.match(/\[[\s\S]*\]/);
                 if (!jsonMatch) throw new Error('Yanıtta ders programı bulunamadı. Daha net bir fotoğraf deneyin.');
@@ -2588,6 +2565,96 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 const btn = this.$('import-analyze-btn');
                 if (btn) { btn.disabled = false; btn.innerHTML = '🔍 Tekrar Dene'; }
             }
+        },
+
+        _scheduleExtractionPrompt() {
+            return `Bu görüntüde bir haftalık ders programı var. Tüm dersleri JSON dizisi olarak çıkar. Her ders nesnesi tam olarak şu alanları içermeli:
+- "day": Türkçe gün adı — yalnızca şunlardan biri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma, Cumartesi, Pazar
+- "name": Ders adı (string)
+- "teacher": Öğretmen/hoca adı (string, yoksa boş string "")
+- "start": Başlangıç saati "HH:MM" formatında (örn: "09:00")
+- "end": Bitiş saati "HH:MM" formatında (örn: "10:30")
+
+Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya metin ekleme. Ders programı bulunamazsa boş dizi [] döndür.`;
+        },
+
+        async _callClaude(apiKey, base64, mediaType, prompt) {
+            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 2048,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+                            { type: 'text', text: prompt }
+                        ]
+                    }]
+                })
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Claude API hatası (${resp.status})`);
+            }
+            const result = await resp.json();
+            return result.content?.[0]?.text || '';
+        },
+
+        async _callDeepSeek(apiKey, base64, mediaType, prompt) {
+            const model = this.$('import-model')?.value.trim() || 'deepseek-chat';
+            const resp = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    max_tokens: 2048,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+                            { type: 'text', text: prompt }
+                        ]
+                    }]
+                })
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                let msg = errData.error?.message || `DeepSeek API hatası (${resp.status})`;
+                // Model görseli desteklemiyorsa kullanıcıya net yönlendirme ver
+                if (/image|multimodal|vision|content|not support/i.test(msg)) {
+                    msg += ' — Seçtiğiniz DeepSeek modeli görüntü işlemiyor olabilir. Görüntü destekli bir model deneyin ya da Claude sağlayıcısını kullanın.';
+                }
+                throw new Error(msg);
+            }
+            const result = await resp.json();
+            return result.choices?.[0]?.message?.content || '';
+        },
+
+        onImportProviderChange() {
+            const provider = this.$('import-provider')?.value || 'claude';
+            const isDeepSeek = provider === 'deepseek';
+            const label = this.$('import-api-key-label');
+            const hint = this.$('import-api-key-hint');
+            const note = this.$('import-api-key-note');
+            const input = this.$('import-api-key');
+            const modelGroup = this.$('import-model-group');
+            if (modelGroup) modelGroup.style.display = isDeepSeek ? 'block' : 'none';
+            if (label) label.childNodes[0].nodeValue = isDeepSeek ? 'DeepSeek API Anahtarı ' : 'Claude API Anahtarı ';
+            if (hint) hint.textContent = isDeepSeek ? "platform.deepseek.com'dan alabilirsiniz" : "anthropic.com'dan alabilirsiniz";
+            if (input) input.placeholder = isDeepSeek ? 'sk-...' : 'sk-ant-api03-...';
+            if (note) note.textContent = isDeepSeek
+                ? '🔒 Anahtar bu analiz isteği için DeepSeek API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.'
+                : '🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.';
         },
 
         _fileToBase64(file) {
