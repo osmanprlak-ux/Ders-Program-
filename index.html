@@ -1052,31 +1052,31 @@
             <div class="logo-icon">🎓</div>
             Öğrenci Asistanı
         </div>
-        <div class="nav-items">
-            <div class="nav-item active" data-tab="dashboard" onclick="app.switchTab('dashboard', this)">
-                <span class="nav-icon">📊</span> Dashboard
+        <div class="nav-items" role="tablist" aria-label="Ana menü">
+            <div class="nav-item active" data-tab="dashboard" role="tab" tabindex="0" aria-label="Dashboard" onclick="app.switchTab('dashboard', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">📊</span> Dashboard
             </div>
-            <div class="nav-item" data-tab="schedule" onclick="app.switchTab('schedule', this)">
-                <span class="nav-icon">📅</span> Program
+            <div class="nav-item" data-tab="schedule" role="tab" tabindex="0" aria-label="Program" onclick="app.switchTab('schedule', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">📅</span> Program
             </div>
-            <div class="nav-item" data-tab="agenda" onclick="app.switchTab('agenda', this)">
-                <span class="nav-icon">📝</span> Ajanda
+            <div class="nav-item" data-tab="agenda" role="tab" tabindex="0" aria-label="Ajanda" onclick="app.switchTab('agenda', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">📝</span> Ajanda
                 <span class="nav-badge" id="task-badge" style="display:none;">0</span>
             </div>
-            <div class="nav-item" data-tab="notes" onclick="app.switchTab('notes', this)">
-                <span class="nav-icon">📓</span> Notlar
+            <div class="nav-item" data-tab="notes" role="tab" tabindex="0" aria-label="Notlar" onclick="app.switchTab('notes', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">📓</span> Notlar
             </div>
-            <div class="nav-item" data-tab="flashcards" onclick="app.switchTab('flashcards', this)">
-                <span class="nav-icon">🃏</span> Kartlar
+            <div class="nav-item" data-tab="flashcards" role="tab" tabindex="0" aria-label="Kartlar" onclick="app.switchTab('flashcards', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">🃏</span> Kartlar
             </div>
-            <div class="nav-item" data-tab="habits" onclick="app.switchTab('habits', this)">
-                <span class="nav-icon">🔥</span> Alışkanlıklar
+            <div class="nav-item" data-tab="habits" role="tab" tabindex="0" aria-label="Alışkanlıklar" onclick="app.switchTab('habits', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">🔥</span> Alışkanlıklar
             </div>
-            <div class="nav-item" data-tab="gpa" onclick="app.switchTab('gpa', this)">
-                <span class="nav-icon">🎯</span> Not Hesapla
+            <div class="nav-item" data-tab="gpa" role="tab" tabindex="0" aria-label="Not Hesapla" onclick="app.switchTab('gpa', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">🎯</span> Not Hesapla
             </div>
-            <div class="nav-item" data-tab="pomodoro" onclick="app.switchTab('pomodoro', this)">
-                <span class="nav-icon">⏱️</span> Pomodoro
+            <div class="nav-item" data-tab="pomodoro" role="tab" tabindex="0" aria-label="Pomodoro" onclick="app.switchTab('pomodoro', this)" onkeydown="app.activateOnKey(event)">
+                <span class="nav-icon" aria-hidden="true">⏱️</span> Pomodoro
             </div>
         </div>
         <div class="sidebar-footer">
@@ -1526,13 +1526,31 @@
             <p class="import-modal-sub">Ders programı fotoğrafını yükle, yapay zeka otomatik tanıyıp eklesin.</p>
 
             <div class="form-group">
-                <label>Claude API Anahtarı &nbsp;<span style="color:var(--text-muted);font-size:0.78em;">anthropic.com'dan alabilirsiniz</span></label>
+                <label for="import-provider">Yapay Zeka Sağlayıcısı</label>
+                <select id="import-provider" onchange="app.onImportProviderChange()" style="width:100%;">
+                    <option value="claude">Claude (Anthropic) — fotoğraf için önerilir</option>
+                    <option value="deepseek">DeepSeek</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="import-model-group" style="display:none;">
+                <label for="import-model">DeepSeek Modeli</label>
+                <input type="text" id="import-model" value="deepseek-chat" style="width:100%;" autocomplete="off" spellcheck="false">
+                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">⚠️ Fotoğraf okumak için <b>görüntü destekli</b> bir DeepSeek modeli gerekir. Salt metin modelleri (deepseek-chat) görseli işleyemez.</p>
+            </div>
+
+            <div class="form-group">
+                <label id="import-api-key-label" for="import-api-key">Claude API Anahtarı &nbsp;<span id="import-api-key-hint" style="color:var(--text-muted);font-size:0.78em;">anthropic.com'dan alabilirsiniz</span></label>
                 <div style="position:relative;">
                     <input type="password" id="import-api-key" placeholder="sk-ant-api03-..." style="width:100%;padding-right:2.8rem;" autocomplete="off" spellcheck="false">
-                    <button type="button" id="api-key-toggle" onclick="app.toggleApiKeyVisibility()" title="Göster/Gizle"
+                    <button type="button" id="api-key-toggle" onclick="app.toggleApiKeyVisibility()" title="Göster/Gizle" aria-label="API anahtarını göster veya gizle"
                         style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;font-size:1.1rem;line-height:1;">👁️</button>
                 </div>
-                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.</p>
+                <p id="import-api-key-note" style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.</p>
+                <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;margin-top:0.45rem;cursor:pointer;font-weight:normal;">
+                    <input type="checkbox" id="import-remember-key" style="width:auto;margin:0;"> Anahtarı bu cihazda hatırla
+                    <span style="color:var(--text-muted);font-size:0.92em;">(yalnızca bu tarayıcıda saklanır)</span>
+                </label>
             </div>
 
             <div class="form-group">
@@ -1661,12 +1679,27 @@
                 }
             });
 
+            // PWA kısayolları / derin bağlantı: ?tab=pomodoro gibi parametreyle sekme aç
+            try {
+                const tabParam = new URLSearchParams(location.search).get('tab');
+                const validTabs = ['dashboard','schedule','agenda','notes','flashcards','habits','gpa','pomodoro'];
+                if (tabParam && validTabs.includes(tabParam)) this.switchTab(tabParam);
+            } catch (e) {}
+
             // Scroll active bottom nav into view
             this._scrollBottomNav();
         },
 
         // ═════════ HELPERS ═════════
         $(id) { return document.getElementById(id); },
+
+        // Klavye ile etkinleştirme (Enter/Space) — tıklanabilir div'ler için erişilebilirlik
+        activateOnKey(e) {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                e.currentTarget.click();
+            }
+        },
 
         makeId(offset = 0) {
             return Date.now() + offset + Math.floor(Math.random() * 1000);
@@ -1690,9 +1723,9 @@
             return new Date(y, m - 1, d);
         },
 
-        formatDateKey(value) {
+        formatDateKey(value, locale = 'tr-TR') {
             const d = this.dateFromKey(value);
-            return d ? d.toLocaleDateString('tr-TR') : '';
+            return d ? d.toLocaleDateString(locale) : '';
         },
 
         daysBetween(fromKey, toKey) {
@@ -1954,17 +1987,20 @@
         },
 
         loadData() {
+            let raw = null;
             try {
                 const v3 = localStorage.getItem('OgrenciAsistaniData_v3');
                 const v2 = localStorage.getItem('OgrenciAsistaniData_v2');
-                const raw = v3 || v2;
+                raw = v3 || v2;
                 this.data = raw ? this.normalizeData(JSON.parse(raw)) : this.normalizeData(this.data);
                 this._storageHealthy = true;
             } catch (e) {
                 console.error("Veri yükleme hatası:", e);
                 this.data = this.normalizeData({});
                 this._storageHealthy = false;
-                this.showToast('Kayıtlı veri okunamadı. Eski verinin üstüne yazmamak için kaydetme durduruldu; lütfen sağlam bir yedek JSON içe aktarın.', 'error');
+                // Bozuk ham veriyi kaybetmemek için yedeğe al; "Verileri İndir" bunu kurtarma olarak indirir
+                if (raw) { try { localStorage.setItem('OgrenciAsistaniData_corrupt', raw); } catch (e2) {} }
+                this.showToast('Kayıtlı veri okunamadı. Üstüne yazılmasın diye kaydetme durduruldu. "Verileri İndir" ile ham yedeği kurtarabilir, ardından sağlam bir JSON içe aktarabilirsiniz.', 'error');
             }
         },
 
@@ -1994,17 +2030,31 @@
             });
         },
 
+        _downloadBlob(text, filename) {
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+
         exportData() {
             try {
+                // Depolama bozuksa, kayıtlı ham yedeği kurtarma dosyası olarak indir
+                if (!this._storageHealthy) {
+                    let corrupt = null;
+                    try { corrupt = localStorage.getItem('OgrenciAsistaniData_corrupt'); } catch (e) {}
+                    if (corrupt) {
+                        this._downloadBlob(corrupt, `ogrenci-asistani-KURTARMA-${this.todayKey()}.json`);
+                        this.showToast('Depolama bozuk: kurtarma için ham yedek indirildi.', 'warning');
+                        return;
+                    }
+                }
                 const payload = { ...this.normalizeData(this.data), pomoStats: this.getPomoStatsPayload() };
-                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ogrenci-asistani-${this.todayKey()}.json`;
-                document.body.appendChild(a); a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                this._downloadBlob(JSON.stringify(payload, null, 2), `ogrenci-asistani-${this.todayKey()}.json`);
                 this.showToast('Veriler indirildi!', 'success');
             } catch (e) { this.showToast('İndirme hatası!', 'error'); }
         },
@@ -2023,6 +2073,7 @@
                     this.data = this.normalizeData({ ...this.data, ...patch });
                     this._storageHealthy = true;
                     this._storageWarningShown = false;
+                    try { localStorage.removeItem('OgrenciAsistaniData_corrupt'); } catch (e2) {}
                     if (hasPomoStats) {
                         Object.assign(this.pomo, this.normalizePomoStats(imported.pomoStats));
                         this.savePomoStats();
@@ -2156,11 +2207,13 @@
         },
 
         showConfetti() {
+            // Hareket azaltma tercihi olan kullanıcılarda animasyonu atla
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
             const c = document.createElement('div');
             c.className = 'confetti-container';
             document.body.appendChild(c);
             const colors = ['#4f46e5','#7c3aed','#10b981','#f59e0b','#ef4444','#ec4899','#3b82f6'];
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 18; i++) {
                 const p = document.createElement('div');
                 p.className = 'confetti-piece';
                 p.style.cssText = `left:${Math.random()*100}%;background:${colors[i%colors.length]};animation-delay:${Math.random()*0.8}s;animation-duration:${2+Math.random()*2}s;border-radius:${Math.random()>0.5?'50%':'2px'};width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;`;
@@ -2424,7 +2477,38 @@
         openImportModal() {
             const modal = this.$('import-modal');
             if (!modal) return;
+            this._loadRememberedKey();
             modal.style.display = 'flex';
+        },
+
+        _loadRememberedKey() {
+            let saved = null;
+            try { saved = JSON.parse(localStorage.getItem('OgrenciAsistaniImportKey') || 'null'); } catch (e) {}
+            const remember = this.$('import-remember-key');
+            const provSel = this.$('import-provider');
+            const keyInput = this.$('import-api-key');
+            const modelInput = this.$('import-model');
+            if (saved && saved.key) {
+                if (provSel && (saved.provider === 'claude' || saved.provider === 'deepseek')) provSel.value = saved.provider;
+                this.onImportProviderChange();
+                if (modelInput && saved.model) modelInput.value = saved.model;
+                if (keyInput) keyInput.value = saved.key;
+                if (remember) remember.checked = true;
+            } else if (remember) {
+                remember.checked = false;
+            }
+        },
+
+        _persistRememberedKey(provider, key) {
+            const remember = this.$('import-remember-key');
+            try {
+                if (remember && remember.checked) {
+                    const model = this.$('import-model')?.value.trim() || '';
+                    localStorage.setItem('OgrenciAsistaniImportKey', JSON.stringify({ provider, key, model }));
+                } else {
+                    localStorage.removeItem('OgrenciAsistaniImportKey');
+                }
+            } catch (e) {}
         },
 
         closeImportModal() {
@@ -2480,8 +2564,9 @@
         },
 
         async processScheduleImage() {
+            const provider = this.$('import-provider')?.value || 'claude';
             const apiKey = this.$('import-api-key')?.value.trim();
-            if (!apiKey) { this.showToast('Lütfen Claude API anahtarını girin!', 'warning'); return; }
+            if (!apiKey) { this.showToast('Lütfen API anahtarını girin!', 'warning'); return; }
             if (!this._importFile) { this.showToast('Lütfen bir fotoğraf seçin!', 'warning'); return; }
 
             const btn = this.$('import-analyze-btn');
@@ -2496,49 +2581,11 @@
             try {
                 const base64 = await this._fileToBase64(this._importFile);
                 const mediaType = this._importFile.type;
+                const prompt = this._scheduleExtractionPrompt();
 
-                const resp = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-dangerous-direct-browser-access': 'true'
-                    },
-                    body: JSON.stringify({
-                        model: 'claude-haiku-4-5-20251001',
-                        max_tokens: 2048,
-                        messages: [{
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'image',
-                                    source: { type: 'base64', media_type: mediaType, data: base64 }
-                                },
-                                {
-                                    type: 'text',
-                                    text: `Bu görüntüde bir haftalık ders programı var. Tüm dersleri JSON dizisi olarak çıkar. Her ders nesnesi tam olarak şu alanları içermeli:
-- "day": Türkçe gün adı — yalnızca şunlardan biri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma, Cumartesi, Pazar
-- "name": Ders adı (string)
-- "teacher": Öğretmen/hoca adı (string, yoksa boş string "")
-- "start": Başlangıç saati "HH:MM" formatında (örn: "09:00")
-- "end": Bitiş saati "HH:MM" formatında (örn: "10:30")
-
-Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya metin ekleme. Ders programı bulunamazsa boş dizi [] döndür.`
-                                }
-                            ]
-                        }]
-                    })
-                });
-
-                if (!resp.ok) {
-                    const errData = await resp.json().catch(() => ({}));
-                    const msg = errData.error?.message || `API hatası (${resp.status})`;
-                    throw new Error(msg);
-                }
-
-                const result = await resp.json();
-                const text = result.content?.[0]?.text || '';
+                const text = provider === 'deepseek'
+                    ? await this._callDeepSeek(apiKey, base64, mediaType, prompt)
+                    : await this._callClaude(apiKey, base64, mediaType, prompt);
 
                 const jsonMatch = text.match(/\[[\s\S]*\]/);
                 if (!jsonMatch) throw new Error('Yanıtta ders programı bulunamadı. Daha net bir fotoğraf deneyin.');
@@ -2576,6 +2623,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 if (valid.length === 0) throw new Error('Geçerli formatta ders bulunamadı. Lütfen fotoğrafı kontrol edin.');
 
                 this._importItems = valid;
+                this._persistRememberedKey(provider, apiKey);
                 this.closeImportModal();
                 this.showImportPreview();
 
@@ -2588,6 +2636,96 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 const btn = this.$('import-analyze-btn');
                 if (btn) { btn.disabled = false; btn.innerHTML = '🔍 Tekrar Dene'; }
             }
+        },
+
+        _scheduleExtractionPrompt() {
+            return `Bu görüntüde bir haftalık ders programı var. Tüm dersleri JSON dizisi olarak çıkar. Her ders nesnesi tam olarak şu alanları içermeli:
+- "day": Türkçe gün adı — yalnızca şunlardan biri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma, Cumartesi, Pazar
+- "name": Ders adı (string)
+- "teacher": Öğretmen/hoca adı (string, yoksa boş string "")
+- "start": Başlangıç saati "HH:MM" formatında (örn: "09:00")
+- "end": Bitiş saati "HH:MM" formatında (örn: "10:30")
+
+Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya metin ekleme. Ders programı bulunamazsa boş dizi [] döndür.`;
+        },
+
+        async _callClaude(apiKey, base64, mediaType, prompt) {
+            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 2048,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+                            { type: 'text', text: prompt }
+                        ]
+                    }]
+                })
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Claude API hatası (${resp.status})`);
+            }
+            const result = await resp.json();
+            return result.content?.[0]?.text || '';
+        },
+
+        async _callDeepSeek(apiKey, base64, mediaType, prompt) {
+            const model = this.$('import-model')?.value.trim() || 'deepseek-chat';
+            const resp = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    max_tokens: 2048,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+                            { type: 'text', text: prompt }
+                        ]
+                    }]
+                })
+            });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                let msg = errData.error?.message || `DeepSeek API hatası (${resp.status})`;
+                // Model görseli desteklemiyorsa kullanıcıya net yönlendirme ver
+                if (/image|multimodal|vision|content|not support/i.test(msg)) {
+                    msg += ' — Seçtiğiniz DeepSeek modeli görüntü işlemiyor olabilir. Görüntü destekli bir model deneyin ya da Claude sağlayıcısını kullanın.';
+                }
+                throw new Error(msg);
+            }
+            const result = await resp.json();
+            return result.choices?.[0]?.message?.content || '';
+        },
+
+        onImportProviderChange() {
+            const provider = this.$('import-provider')?.value || 'claude';
+            const isDeepSeek = provider === 'deepseek';
+            const label = this.$('import-api-key-label');
+            const hint = this.$('import-api-key-hint');
+            const note = this.$('import-api-key-note');
+            const input = this.$('import-api-key');
+            const modelGroup = this.$('import-model-group');
+            if (modelGroup) modelGroup.style.display = isDeepSeek ? 'block' : 'none';
+            if (label) label.childNodes[0].nodeValue = isDeepSeek ? 'DeepSeek API Anahtarı ' : 'Claude API Anahtarı ';
+            if (hint) hint.textContent = isDeepSeek ? "platform.deepseek.com'dan alabilirsiniz" : "anthropic.com'dan alabilirsiniz";
+            if (input) input.placeholder = isDeepSeek ? 'sk-...' : 'sk-ant-api03-...';
+            if (note) note.textContent = isDeepSeek
+                ? '🔒 Anahtar bu analiz isteği için DeepSeek API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.'
+                : '🔒 Anahtar bu analiz isteği için Anthropic API’ye gönderilir ve bu uygulamada kalıcı olarak saklanmaz.';
         },
 
         _fileToBase64(file) {
@@ -3027,7 +3165,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
             const card = cards[idx];
             area.innerHTML = `
                 <div class="flashcard-container">
-                    <div class="flashcard" id="current-flashcard" onclick="app.flipFlashcard()">
+                    <div class="flashcard" id="current-flashcard" role="button" tabindex="0" aria-label="Kartı çevir" onclick="app.flipFlashcard()" onkeydown="app.activateOnKey(event)">
                         <div class="flashcard-face flashcard-front">
                             <h3>❓ Soru</h3>
                             <p>${this.escapeHtml(card.front)}</p>
@@ -3143,7 +3281,7 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                     const d = new Date(today); d.setDate(d.getDate()-i);
                     const ds = this.todayKey(d);
                     const checked = (h.checks||{})[ds];
-                    daysHtml += `<div class="habit-day ${checked?'checked':''} ${i===0?'today':''}" onclick="app.toggleHabitDay(${h.id},'${ds}')" title="${d.toLocaleDateString('tr-TR')}">${checked?'✓':dayLabels[d.getDay()]}</div>`;
+                    daysHtml += `<div class="habit-day ${checked?'checked':''} ${i===0?'today':''}" role="button" tabindex="0" aria-label="${d.toLocaleDateString('tr-TR')} işaretle veya kaldır" aria-pressed="${checked?'true':'false'}" onclick="app.toggleHabitDay(${h.id},'${ds}')" onkeydown="app.activateOnKey(event)" title="${d.toLocaleDateString('tr-TR')}">${checked?'✓':dayLabels[d.getDay()]}</div>`;
                 }
                 return `<div class="habit-card" style="border-left-color:${streak>=7?'var(--secondary)':streak>=3?'var(--warning)':'var(--primary)'}">
                     <div class="habit-header">
