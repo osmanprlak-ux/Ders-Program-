@@ -799,6 +799,7 @@
             flex-direction: column;
             align-items: flex-end;
             gap: 0;
+            pointer-events: none; /* kapalı menünün görünmez alanı tıklamayı engellemesin */
         }
         .fab-main {
             width: 52px; height: 52px;
@@ -811,6 +812,7 @@
             border: none; cursor: pointer;
             transition: var(--transition);
             z-index: 1001;
+            pointer-events: auto;
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
         }
@@ -2569,6 +2571,8 @@
             if (!apiKey) { this.showToast('Lütfen API anahtarını girin!', 'warning'); return; }
             if (!this._importFile) { this.showToast('Lütfen bir fotoğraf seçin!', 'warning'); return; }
             this._lastOcrText = '';
+            // "Hatırla" seçiliyse anahtarı hemen kaydet (analiz başarısız olsa bile)
+            this._persistRememberedKey(provider, apiKey);
 
             const btn = this.$('import-analyze-btn');
             if (btn) { btn.disabled = true; btn.innerHTML = '<span class="import-spinner"></span> Analiz ediliyor...'; }
@@ -2624,7 +2628,6 @@
                 if (valid.length === 0) throw new Error('Geçerli formatta ders bulunamadı. Lütfen fotoğrafı kontrol edin.');
 
                 this._importItems = valid;
-                this._persistRememberedKey(provider, apiKey);
                 this.closeImportModal();
                 this.showImportPreview();
 
