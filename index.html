@@ -1536,7 +1536,7 @@
             <div class="form-group" id="import-model-group" style="display:none;">
                 <label for="import-model">DeepSeek Modeli</label>
                 <input type="text" id="import-model" value="deepseek-chat" style="width:100%;" autocomplete="off" spellcheck="false">
-                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">⚠️ Fotoğraf okumak için <b>görüntü destekli</b> bir DeepSeek modeli gerekir. Salt metin modelleri (deepseek-chat) görseli işleyemez.</p>
+                <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.25rem;">ℹ️ DeepSeek görseli doğrudan okuyamaz. Fotoğraf <b>cihazınızda OCR ile metne çevrilir</b>, sonra DeepSeek bu metni ders programına dönüştürür. <code>deepseek-chat</code> uygundur. (İlk kullanımda OCR verisi indirilir.)</p>
             </div>
 
             <div class="form-group">
@@ -2680,6 +2680,22 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
 
         async _callDeepSeek(apiKey, base64, mediaType, prompt) {
             const model = this.$('import-model')?.value.trim() || 'deepseek-chat';
+            // DeepSeek API'si görsel kabul etmez; önce cihazda OCR ile metni çıkar
+            const ocrText = await this._ocrImage(`data:${mediaType};base64,${base64}`);
+            if (!ocrText || ocrText.trim().length < 3) {
+                throw new Error('Fotoğraftan metin okunamadı (OCR boş). Daha net, düz ve iyi aydınlatılmış bir fotoğraf deneyin.');
+            }
+            const sb = this.$('import-status-box');
+            if (sb) sb.innerHTML = '🤖 DeepSeek ders programını düzenliyor...';
+
+            const userText = `${prompt}
+
+Aşağıda bir ders programı fotoğrafından OCR ile çıkarılmış HAM metin var. Metin gürültülü olabilir, satır/sütun hizası bozuk olabilir; en mantıklı şekilde yorumla. Saatler ve gün/sütun eşleşmelerini tahmin et:
+
+"""
+${ocrText}
+"""`;
+
             const resp = await fetch('https://api.deepseek.com/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -2689,26 +2705,48 @@ Yalnızca geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya meti
                 body: JSON.stringify({
                     model,
                     max_tokens: 2048,
-                    messages: [{
-                        role: 'user',
-                        content: [
-                            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
-                            { type: 'text', text: prompt }
-                        ]
-                    }]
+                    messages: [
+                        { role: 'system', content: 'Ders programı fotoğraflarından OCR ile çıkarılan metni yapılandırılmış JSON\'a çeviren bir asistansın. Yalnızca geçerli bir JSON dizisi döndür.' },
+                        { role: 'user', content: userText }
+                    ]
                 })
             });
             if (!resp.ok) {
                 const errData = await resp.json().catch(() => ({}));
-                let msg = errData.error?.message || `DeepSeek API hatası (${resp.status})`;
-                // Model görseli desteklemiyorsa kullanıcıya net yönlendirme ver
-                if (/image|multimodal|vision|content|not support/i.test(msg)) {
-                    msg += ' — Seçtiğiniz DeepSeek modeli görüntü işlemiyor olabilir. Görüntü destekli bir model deneyin ya da Claude sağlayıcısını kullanın.';
-                }
-                throw new Error(msg);
+                throw new Error(errData.error?.message || `DeepSeek API hatası (${resp.status})`);
             }
             const result = await resp.json();
             return result.choices?.[0]?.message?.content || '';
+        },
+
+        // Tesseract.js OCR motorunu CDN'den tek seferlik yükler
+        _ensureTesseract() {
+            if (window.Tesseract) return Promise.resolve();
+            if (this._tesseractLoading) return this._tesseractLoading;
+            this._tesseractLoading = new Promise((resolve, reject) => {
+                const sb = this.$('import-status-box');
+                if (sb) sb.innerHTML = '⏬ OCR motoru indiriliyor (ilk kullanımda biraz sürebilir)...';
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                s.onload = () => resolve();
+                s.onerror = () => { this._tesseractLoading = null; reject(new Error('OCR motoru yüklenemedi. İnternet bağlantınızı kontrol edin.')); };
+                document.head.appendChild(s);
+            });
+            return this._tesseractLoading;
+        },
+
+        // Fotoğraftan metin çıkarır (Türkçe + İngilizce)
+        async _ocrImage(imageData) {
+            await this._ensureTesseract();
+            const sb = this.$('import-status-box');
+            const result = await Tesseract.recognize(imageData, 'tur+eng', {
+                logger: (m) => {
+                    if (sb && m.status === 'recognizing text') {
+                        sb.innerHTML = `🔎 Fotoğraf okunuyor (OCR)... %${Math.round((m.progress || 0) * 100)}`;
+                    }
+                }
+            });
+            return result?.data?.text || '';
         },
 
         onImportProviderChange() {
